@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <SPI.h>
 #include <MFRC522.h>
+using namespace std;
 
 #define BUTTON 32
 #define SCK 18
@@ -14,25 +15,21 @@
 #define GRUEN 27
 #define ROT 26
 
-String chip = "36 12 6F 90";
-String karte = "8C 3F 5F DB";
-
-byte test = 0;
-
-
-const char* ssid     = "FRITZ!Box 7490";
-const char* password = "80073437732487114646";
-
-const char  FRITZBOX_IP[]         = "192.168.188.1";
-const int   FRITZBOX_PORT         = 49000;
-const char  FRITZBOXUSER[]        = "FBuser";
-const char  FRITZBOXPASSWORD[]    = "FBpasswort";
+void wifi_connection();
+void buttonRot();
+void buttonGruen();
+void klingeln();
 
 MFRC522 cardReader(SDA, RST);
-TR064 tr064_connection(FRITZBOX_PORT, FRITZBOX_IP, FRITZBOXUSER, FRITZBOXPASSWORD);
 
-String lastRfid = ""; 
- 
+byte karte[] = {0xA3, 0xBA, 0x8F, 0x94};
+byte chip[] = {0x23, 0x22, 0xD7, 0x91};
+
+String lastRfid = "";
+
+const char* ssid     = "anouri SNS";
+const char* password = "flume budge prolate crypt gave berkeley judaism comely";
+
 void setup() {
   Serial.begin(9600);
   
@@ -42,7 +39,6 @@ void setup() {
   pinMode(ROT, OUTPUT);
   pinMode(GRUEN, OUTPUT);
 
-
   delay(50);
 
   SPI.begin();
@@ -51,7 +47,6 @@ void setup() {
  
 void loop() {
   int buttonStatus = digitalRead(BUTTON);
-  // Serial.println(buttonStatus);
 
   if ( ! cardReader.PICC_IsNewCardPresent() || ! cardReader.PICC_ReadCardSerial()) {
     return;
@@ -59,26 +54,33 @@ void loop() {
  
   String newRfidId = "";
   for (byte i = 0; i < cardReader.uid.size; i++) {
-    // !! Achtung es wird ein Leerzeichen vor der ID gesetzt !!
     newRfidId.concat(cardReader.uid.uidByte[i] < 0x10 ? " 0" : " ");
     newRfidId.concat(String(cardReader.uid.uidByte[i], HEX));
-
-    test = cardReader.uid.uidByte[i];
   }
  
-  //alle Buchstaben in Großbuchstaben umwandeln
   newRfidId.toUpperCase();
  
-  //Wenn die neue gelesene RFID-ID ungleich der bereits zuvor gelesenen ist,
-  //dann soll diese auf der seriellen Schnittstelle ausgegeben werden.
   if (!newRfidId.equals(lastRfid)) {
-    //überschreiben der alten ID mit der neuen
     lastRfid = newRfidId;
     Serial.print(" gelesene RFID-ID :");
     Serial.println(newRfidId);
-    Serial.println();
-    Serial.println(test);
-    if (test == 0xdb) {
+
+    int result = memcmp(cardReader.uid.uidByte, chip, 4);
+    Serial.println(result);
+
+    Serial.println("Chip:");
+    for (byte i = 0; i < 4; i++) {
+      Serial.print(chip[i], HEX);
+      Serial.print(" ");
+    }
+
+    Serial.println("Current Rfid:");
+    for (byte i = 0; i < cardReader.uid.size; i++) {
+      Serial.print(cardReader.uid.uidByte[i], HEX);
+      Serial.print(" ");
+    }
+
+    if (result == 0) {
       buttonGruen();
 
     }
@@ -103,11 +105,7 @@ void buttonGruen() {
 }
 
 void klingeln() {
-  tr064_connection.init();
-  String call_params[][2] = {{"NewX_AVM-DE_PhoneNumber", "**9"}};                                          // Die Telefonnummer **9 ist der Fritzbox-Rundruf.
-  tr064_connection.action("urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_DialNumber", call_params, 1);    // Action: Rundruf
-  delay(2000);                                                                                            // Warte 2 Sekunden bis zum Auflegen
-  tr064_connection.action("urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_DialHangup");
+  Serial.println("Klingeling Klingeling");
 }
  
 void wifi_connection() {
