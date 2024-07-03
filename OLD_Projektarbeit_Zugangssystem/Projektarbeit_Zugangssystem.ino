@@ -79,24 +79,24 @@ void loop() {
     Serial.println();
     Serial.println(test);
     if (test == 0xdb) {
-      buttonGruen();
+      ledGreenPulse();
 
     }
     else {
-      buttonRot();
+      ledRedPulse();
       klingeln();
     }
   }
 }
 
 
-void buttonRot() {
+void ledRedPulse() {
   digitalWrite(GRUEN, LOW);
 
   digitalWrite(ROT, HIGH);
 }
 
-void buttonGruen() {
+void ledGreenPulse() {
   digitalWrite(ROT, LOW);
 
   digitalWrite(GRUEN, HIGH);

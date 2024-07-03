@@ -123,14 +123,14 @@
             let nameInput = document.getElementById('nameInput').value.trim();
             if (nameInput !== '') {
                 // get request to the server
-                fetch('http://localhost:8080/add?key=' + nameInput)
+                fetch('http://' + window.location.hostname + ':80/add?key=' + nameInput)
                     .then(response => response.json());
             }
         }
 
         function toggleRemoveMode() {
            // get request to the server
-            fetch('http://localhost:8080/removeMode')
+            fetch('http://' + window.location.hostname + ':80/removeMode')
                 .then(response => response.json());
             
         }

@@ -5,6 +5,7 @@
 #include <MFRC522.h>
 #include <Keypad.h>
 #include <driver/ledc.h> // Hinzufügen der LEDC-Bibliothek
+#include <list>
 
 using namespace std;
 
@@ -24,6 +25,13 @@ using namespace std;
 #define ROWS 4
 #define COLS 4
 
+struct key {
+  String name;
+  byte* rfid;
+};
+
+list <key> keyList;
+
 String currentkeypadString = "";
 String correctPassword = "1234A";
 
@@ -34,12 +42,24 @@ uint8_t rowPins[ROWS] = {16, 17, 5, 2};
 uint8_t colPins[COLS] = {15, 13, 14, 12};
 
 void wifi_connection();
-void buttonRot();
-void buttonGruen();
+void ledRedPulse();
+void ledGreenPulse();
 void klingeln();
 void alarm();
 void keypadEvent(KeypadEvent key);
 void printControlPage(WiFiClient client);
+void webserverLoop();
+void ledBluePulseShort();
+void webserverTask(void *parameter);
+void otherTask(void *parameter);
+void otherTaskLoop();
+void addKey(String name, byte* rfid);
+void removeKey(byte* rfid);
+void enterAddModus(String name);
+void enterRemoveModus();
+void ledBlueOff();
+void ledBlueOn();
+
 
 const char keyMap[ROWS][COLS] = {
   {'1', '2', '3', 'A'},
@@ -88,9 +108,17 @@ void setup() {
 
   keypad.setDebounceTime(10);
   keypad.addEventListener(keypadEvent);
+
+  // Initialisiere Tasks auf den jeweiligen Kernen
+  xTaskCreatePinnedToCore(webserverTask, "WebServerTask", 10000, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(otherTask, "OtherTask", 10000, NULL, 1, NULL, 1);
 }
- 
+
 void loop() {
+}
+
+
+void otherTaskLoop() {
 
   keypad.getKey();
 
@@ -127,34 +155,61 @@ void loop() {
   }
 
   if (result == 0) {
-    buttonGruen();
+    ledGreenPulse();
 
   }
   else {
     alarm();
-    buttonRot();
+    ledRedPulse();
     klingeln();
   }
 
   delay(1000);
 }
 
+void webserverTask(void *parameter) {
+  // print private IP address and start web server
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  server.begin();
+  while (true) {
+    webserverLoop();
+    vTaskDelay(10);
+  }
+}
 
-void buttonRot() {
+void otherTask(void *parameter) {
+  while (true) {
+    otherTaskLoop();
+    vTaskDelay(10);
+  }
+}
+
+void ledRedPulse() {
   digitalWrite(ROT, HIGH);
   delay(1000);
   digitalWrite(ROT, LOW);
 }
 
-void buttonGruen() {
+void ledGreenPulse() {
   digitalWrite(GRUEN, HIGH);
   delay(1000);
   digitalWrite(GRUEN, LOW);
 }
 
-void buttonBlauKurz() {
+void ledBluePulseShort() {
   digitalWrite(BLAU, HIGH);
   delay(200);
+  digitalWrite(BLAU, LOW);
+}
+
+void ledBlueOn() {
+  digitalWrite(BLAU, HIGH);
+}
+
+void ledBlueOff() {
   digitalWrite(BLAU, LOW);
 }
 
@@ -195,6 +250,21 @@ void webserverLoop() {
       if (header.indexOf("GET / ") != -1 || header.indexOf("GET /index") != -1) {
         printControlPage(client);
       }
+      else if (header.indexOf("GET /add?key=") != -1) {
+        int start = header.indexOf("GET /add?key=") + 13;
+        int end = header.indexOf("HTTP/1.1") - 1;
+        String name = header.substring(start, end);;
+        enterAddModus(name);
+      }
+      else if (header.indexOf("GET /removeMode") != -1) {
+        enterRemoveModus();
+      }
+      else {
+        client.println("HTTP/1.1 404 Not Found");
+        client.println("Content-type:text/html");
+        client.println();
+        client.println("<h1>404 Not Found</h1>");
+      }
     }
 
     header = "";            // Zurücksetzen der Variablen
@@ -215,21 +285,69 @@ void wifi_connection() {
 void keypadEvent(KeypadEvent key) {
   if (keypad.getState() == RELEASED) {
     currentkeypadString += key;
-    buttonBlauKurz();
+    ledBluePulseShort();
 
     Serial.println(currentkeypadString);
     if (currentkeypadString.length() == 5) {
       if (currentkeypadString == correctPassword) {
         Serial.println("Passwort korrekt");
-        buttonGruen();
+        ledGreenPulse();
       }
       else {
         Serial.println("Passwort falsch");
-        buttonRot();
+        ledRedPulse();
         alarm();
       }
       currentkeypadString = "";
     }
+  }
+}
+
+void addkey(String name, byte* rfid) {
+  key newKey;
+  newKey.name = name;
+  newKey.rfid = rfid;
+  keyList.push_back(newKey);
+}
+
+void removeKey(byte* rfid) {
+  for (list<key>::iterator it = keyList.begin(); it != keyList.end(); it++) {
+    if (it->rfid == rfid) {
+      keyList.erase(it);
+      break;
+    }
+  }
+}
+
+void enterAddModus(String name) {
+  Serial.println("Enter Add Modus");
+  ledBlueOn();
+
+  while (true) {
+    if (!cardReader.PICC_IsNewCardPresent() || !cardReader.PICC_ReadCardSerial()) {
+      continue;
+    }
+    addKey(name, &cardReader.uid.uidByte[0]);
+    ledBlueOff();
+    ledBluePulseShort();
+    ledGreenPulse();
+    break;
+  }
+}
+
+void enterRemoveModus() {
+  Serial.println("Enter Remove Modus");
+  ledBlueOn();
+
+  while (true) {
+    if (!cardReader.PICC_IsNewCardPresent() || !cardReader.PICC_ReadCardSerial()) {
+      continue;
+    }
+    removeKey(cardReader.uid.uidByte);
+    ledBlueOff();
+    ledBluePulseShort();
+    ledRedPulse();
+    break;
   }
 }
 
@@ -356,43 +474,16 @@ void printControlPage(WiFiClient client) {
   client.println("let nameInput = document.getElementById('nameInput').value.trim();");
   client.println("if (nameInput !== '') {");
   client.println("// get request to the server");
-  client.println("fetch('http://localhost:8080/add?key=' + nameInput)");
+  client.println("fetch('http://' + window.location.hostname + ':80/add?key=' + nameInput)");
   client.println(".then(response => response.json());");
   client.println("}");
   client.println("}");
   client.println("function toggleRemoveMode() {");
   client.println("// get request to the server");
-  client.println("fetch('http://localhost:8080/removeMode')");
+  client.println("fetch('http://' + window.location.hostname + ':80/removeMode')");
   client.println(".then(response => response.json());");
   client.println("}");
   client.println("</script>");
   client.println("</body>");
   client.println("</html>");
 }
-// byte* readRfid() {
-//   if ( ! cardReader.PICC_IsNewCardPresent()) {
-//     // Serial.println("Keine neue Karte!");
-//     return NULL;
-//   }
-
-//   if ( ! cardReader.PICC_ReadCardSerial()) {
-//     Serial.println("Karte kann nicht gelesen werden!");
-//     return NULL;
-//   }
-
-//   return cardReader.uid.uidByte;
-// }
-
-// String transformRfid(byte* rfidBytes, int length) {
-//   String newRfidId = "";
-//   for (byte i = 0; i < length; i++) {
-//     // !! Achtung es wird ein Leerzeichen vor der ID gesetzt !!
-//     newRfidId.concat(rfidBytes[i] < 0x10 ? " 0" : " ");
-//     newRfidId.concat(String(rfidBytes[i], HEX));
-//   }
- 
-//   //alle Buchstaben in Großbuchstaben umwandeln
-//   newRfidId.toUpperCase();
-
-//   return newRfidId;
-// }
