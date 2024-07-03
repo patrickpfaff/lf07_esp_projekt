@@ -27,6 +27,9 @@ using namespace std;
 String currentkeypadString = "";
 String correctPassword = "1234A";
 
+WiFiServer server(80);
+String header;
+
 uint8_t rowPins[ROWS] = {16, 17, 5, 2};
 uint8_t colPins[COLS] = {15, 13, 14, 12};
 
@@ -47,6 +50,15 @@ const char keyMap[ROWS][COLS] = {
 
 MFRC522 cardReader(SDA, RST);
 Keypad keypad = Keypad(makeKeymap(keyMap), rowPins, colPins, ROWS, COLS);
+
+// const char* ssid     = "FRITZ!Box 7490";
+// const char* password = "80073437732487114646";
+
+const char  FRITZBOX_IP[]         = "192.168.188.1";
+const int   FRITZBOX_PORT         = 49000;
+const char  FRITZBOXUSER[]        = "FBuser";
+const char  FRITZBOXPASSWORD[]    = "FBpasswort";
+
 // TR064 tr064_connection(FRITZBOX_PORT, FRITZBOX_IP, FRITZBOXUSER, FRITZBOXPASSWORD);
 
 byte karte[] = {0xA3, 0xBA, 0x8F, 0x94};
@@ -163,6 +175,33 @@ void alarm() {
   tone(BUZZER, 500, 250);
   delay(250);
   tone(BUZZER, 500, 250);
+}
+
+void webserverLoop() { 
+   WiFiClient client = server.available();   // listen for incoming clients
+  if (client) {                             // if a new client connects,
+    Serial.println("New Client.");          // print a message out in the serial port
+    if (client.connected() && client.available()) {             // if there's bytes to read from the client,
+      char c1, c2;
+      while (true) {          
+        c2 = c1;
+        c1 = client.read();                 // lese zeichenweise die Daten der Browser-Anfrage ein
+        Serial.write(c1);
+        header += c1;
+
+        if(c1=='\r' && c2=='\n') {break;}   // Wenn Ende der Daten erreicht, breche while-Schleife ab
+      }
+      
+      if (header.indexOf("GET / ") != -1 || header.indexOf("GET /index") != -1) {
+        printControlPage(client);
+      }
+    }
+
+    header = "";            // Zurücksetzen der Variablen
+    client.stop();          // Beende Verbindung
+    Serial.println("Client disconnected.");
+    Serial.println("");
+  }
 }
 
 void wifi_connection() {
