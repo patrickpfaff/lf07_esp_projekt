@@ -27,10 +27,11 @@ using namespace std;
 
 struct key {
   String name;
-  byte* rfid;
+  byte rfid[10];
 };
 
 list <key> keyList;
+list <String> logList;
 
 String currentkeypadString = "";
 String correctPassword = "1234A";
@@ -41,24 +42,27 @@ String header;
 uint8_t rowPins[ROWS] = {16, 17, 5, 2};
 uint8_t colPins[COLS] = {15, 13, 14, 12};
 
-void wifi_connection();
 void ledRedPulse();
 void ledGreenPulse();
-void klingeln();
-void alarm();
-void keypadEvent(KeypadEvent key);
-void printControlPage(WiFiClient client);
-void webserverLoop();
+void ledBlueOff();
+void ledBlueOn();
 void ledBluePulseShort();
+
+void wifi_connection();
+void webserverLoop();
 void webserverTask(void *parameter);
 void otherTask(void *parameter);
 void otherTaskLoop();
-void addKey(String name, byte* rfid);
+
 void removeKey(byte* rfid);
 void enterAddModus(String name);
 void enterRemoveModus();
-void ledBlueOff();
-void ledBlueOn();
+void keypadEvent(KeypadEvent key);
+void alarm();
+void klingeln();
+
+void printControlPage(WiFiClient client);
+void printKeys(WiFiClient client);
 
 
 const char keyMap[ROWS][COLS] = {
@@ -127,42 +131,33 @@ void otherTaskLoop() {
   if ( ! cardReader.PICC_IsNewCardPresent() || ! cardReader.PICC_ReadCardSerial()) {
     return;
   }
- 
-  String newRfidId = "";
-  for (byte i = 0; i < cardReader.uid.size; i++) {
-    newRfidId.concat(cardReader.uid.uidByte[i] < 0x10 ? " 0" : " ");
-    newRfidId.concat(String(cardReader.uid.uidByte[i], HEX));
-  }
- 
-  newRfidId.toUpperCase();
- 
-  Serial.print(" gelesene RFID-ID :");
-  Serial.println(newRfidId);
-
-  int result = memcmp(cardReader.uid.uidByte, chip, 4);
-  Serial.println(result);
-
-  Serial.println("Chip:");
-  for (byte i = 0; i < 4; i++) {
-    Serial.print(chip[i], HEX);
-    Serial.print(" ");
-  }
 
   Serial.println("Current Rfid:");
   for (byte i = 0; i < cardReader.uid.size; i++) {
     Serial.print(cardReader.uid.uidByte[i], HEX);
     Serial.print(" ");
   }
+  Serial.println();
 
-  if (result == 0) {
-    ledGreenPulse();
-
+  for (list<key>::iterator it = keyList.begin(); it != keyList.end(); it++) {
+    bool isEqual = true;
+    for (byte i = 0; i < cardReader.uid.size; i++) {
+      if (it->rfid[i] != cardReader.uid.uidByte[i]) {
+        isEqual = false;
+        break;
+      }
+    }
+    if (isEqual) {
+      Serial.println("Rfid gefunden");
+      ledGreenPulse();
+      String log = it->name + " hat sich angemeldet";
+      
+      return;
+    }
   }
-  else {
-    alarm();
-    ledRedPulse();
-    klingeln();
-  }
+  alarm();
+  klingeln();
+  ledRedPulse();
 
   delay(1000);
 }
@@ -303,13 +298,6 @@ void keypadEvent(KeypadEvent key) {
   }
 }
 
-void addkey(String name, byte* rfid) {
-  key newKey;
-  newKey.name = name;
-  newKey.rfid = rfid;
-  keyList.push_back(newKey);
-}
-
 void removeKey(byte* rfid) {
   for (list<key>::iterator it = keyList.begin(); it != keyList.end(); it++) {
     if (it->rfid == rfid) {
@@ -327,7 +315,11 @@ void enterAddModus(String name) {
     if (!cardReader.PICC_IsNewCardPresent() || !cardReader.PICC_ReadCardSerial()) {
       continue;
     }
-    addKey(name, &cardReader.uid.uidByte[0]);
+    key newKey;
+    newKey.name = name;
+    memcpy(newKey.rfid, cardReader.uid.uidByte, cardReader.uid.size);
+    memset(newKey.rfid + cardReader.uid.size, 0, 10 - cardReader.uid.size);
+    keyList.push_back(newKey);
     ledBlueOff();
     ledBluePulseShort();
     ledGreenPulse();
@@ -463,9 +455,7 @@ void printControlPage(WiFiClient client) {
   client.println("<div class=\"log\" id=\"log\">");
   client.println("<!-- Hier wird das Protokoll angezeigt -->");
   client.println("</div>");
-  client.println("<div class=\"keys\" id=\"keys\">");
-  client.println("<!-- Hier werden die aktuellen Schlüssel angezeigt -->");
-  client.println("</div>");
+  printKeys(client);
   client.println("</section>");
   client.println("</div>");
   client.println("<script>");
@@ -486,4 +476,19 @@ void printControlPage(WiFiClient client) {
   client.println("</script>");
   client.println("</body>");
   client.println("</html>");
+}
+
+void printKeys(WiFiClient client) {
+  client.println("<div class=\"keys\" id=\"keys\">");
+  for (list<key>::iterator it = keyList.begin(); it != keyList.end(); it++) {
+    client.print("<div>");
+    client.print(it->name);
+    client.print(" - ");
+    for (byte i = 0; i < 10; i++) {
+      client.print(it->rfid[i], HEX);
+      client.print(" ");
+    }
+    client.println("</div>");
+  }
+  client.println("</div>");
 }
