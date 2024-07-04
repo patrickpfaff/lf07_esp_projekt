@@ -333,13 +333,16 @@ void keypadEvent(KeypadEvent key) {
       if (currentkeypadString == correctPassword) {
         Serial.println("Passwort korrekt");
         successTonesLowHigh();
+        String currentTime = timeClient.getFormattedTime();
+        String logEntry = "[" + currentTime + "] - Zugang mit korrektem Keypad-Passwort";
+        logList.push_back(logEntry);
         ledGreenPulse();
       }
       else {
         Serial.println("Passwort falsch");
         String currentTime = timeClient.getFormattedTime();
         currentkeypadString.toUpperCase();
-        String logEntry = "[" + currentTime + "] - Falsches Passwort - " + currentkeypadString;
+        String logEntry = "[" + currentTime + "] - Falsches Keypad-Passwort: - " + currentkeypadString;
         logList.push_back(logEntry);
         ledRedPulse();
         alarm();
@@ -594,6 +597,8 @@ void checkForKlingel() {
   // Serial.println(buttonStatus);
   if (buttonStatus == LOW) {
     klingeln();
+    ledBluePulseShort();
+    ledBluePulseShort();
     delay(1000);
   }
 }
