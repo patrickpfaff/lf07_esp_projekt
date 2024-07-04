@@ -120,6 +120,13 @@
                     <!-- Hier werden die verfügbaren Schlüssel angezeigt -->
                 </div>
             </section>
+            <section>
+                <h3>Neues Keypad-Passwort</h3>
+                <div class="input-container">
+                    <input type="text" id="newPassword" placeholder="Passwort eingeben">
+                    <button onclick="changePassword()">Ändern</button>
+                </div>
+            </section>
         </section>
     </div>
 
@@ -136,6 +143,14 @@
             fetch('http://' + window.location.hostname + ':80/removeMode')
                 .then(response => response.json());
             
+        }
+
+        function changePassword() {
+            let newPassword = document.getElementById('newPassword').value.trim();
+            if (newPassword !== '') {
+                fetch('http://' + window.location.hostname + ':80/newPassword?password=' + newPassword)
+                    .then(response => response.json());
+            }
         }
     </script>
 </body>

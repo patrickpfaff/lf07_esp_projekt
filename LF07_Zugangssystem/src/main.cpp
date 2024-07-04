@@ -280,6 +280,14 @@ void webserverLoop() {
       else if (header.indexOf("GET /removeMode") != -1) {
         enterRemoveModus();
       }
+      else if (header.indexOf("GET /newPassword?password=") != -1) {
+        int start = header.indexOf("GET /newPassword?password=") + 26;
+        int end = header.indexOf("HTTP/1.1") - 1;
+        correctPassword = header.substring(start, end);
+        successTonesLowHigh();
+        Serial.println("Neues Passwort: " + correctPassword);
+        ledGreenPulse();
+      }
       else {
         client.println("HTTP/1.1 404 Not Found");
         client.println("Content-type:text/html");
@@ -315,6 +323,7 @@ void keypadEvent(KeypadEvent key) {
     if (currentkeypadString.length() == 5) {
       if (currentkeypadString == correctPassword) {
         Serial.println("Passwort korrekt");
+        successTonesLowHigh();
         ledGreenPulse();
       }
       else {
@@ -496,6 +505,13 @@ void printControlPage(WiFiClient client) {
   client.println("<h3>Verfügbare Schlüssel</h3>");
   printKeys(client);
   client.println("</section>");
+  client.println("<section>");
+  client.println("<h3>Neues Keypad-Passwort</h3>");
+  client.println("<div class=\"input-container\">");
+  client.println("<input type=\"text\" id=\"newPassword\" placeholder=\"Passwort eingeben\">");
+  client.println("<button onclick=\"changePassword()\">Ändern</button>");
+  client.println("</div>");
+  client.println("</section>");
   client.println("</section>");
   client.println("</div>");
   client.println("<script>");
@@ -509,6 +525,13 @@ void printControlPage(WiFiClient client) {
   client.println("function toggleRemoveMode() {");
   client.println("fetch('http://' + window.location.hostname + ':80/removeMode')");
   client.println(".then(response => response.json());");
+  client.println("}");
+  client.println("function changePassword() {");
+  client.println("let newPassword = document.getElementById('newPassword').value.trim();");
+  client.println("if (newPassword !== '') {");
+  client.println("fetch('http://' + window.location.hostname + ':80/newPassword?password=' + newPassword)");
+  client.println(".then(response => response.json());");
+  client.println("}");
   client.println("}");
   client.println("</script>");
   client.println("</body>");
