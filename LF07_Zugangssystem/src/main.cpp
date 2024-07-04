@@ -63,6 +63,7 @@ void alarm();
 void klingeln();
 void shortPositiveTone();
 void successTonesLowHigh();
+void checkForKlingel();
 
 void printControlPage(WiFiClient client);
 void printKeys(WiFiClient client);
@@ -103,7 +104,7 @@ void setup() {
   
   wifi_connection();
 
-  pinMode(GPIO_NUM_32, INPUT_PULLUP);
+  pinMode(BUTTON, INPUT_PULLUP);
   pinMode(ROT, OUTPUT);
   pinMode(GRUEN, OUTPUT);
   pinMode(BLAU, OUTPUT);
@@ -130,7 +131,7 @@ void loop() {
 
 
 void otherTaskLoop() {
-
+  checkForKlingel();
   keypad.getKey();
 
   int buttonStatus = digitalRead(BUTTON);
@@ -138,6 +139,8 @@ void otherTaskLoop() {
   if ( ! cardReader.PICC_IsNewCardPresent() || ! cardReader.PICC_ReadCardSerial()) {
     return;
   }
+
+  ledBluePulseShort();
 
   Serial.println("Current Rfid:");
   for (byte i = 0; i < cardReader.uid.size; i++) {
@@ -156,7 +159,7 @@ void otherTaskLoop() {
     }
     if (isEqual) {
       successTonesLowHigh();
-      Serial.println("Rfid gefunden");
+      Serial.println("Tür geöffnet");
       ledGreenPulse();
       String currentTime = timeClient.getFormattedTime();
       String newRfidId = "";
@@ -170,7 +173,7 @@ void otherTaskLoop() {
       return;
     }
   }
-  Serial.println("Unbekannter Schlüssel");
+  Serial.println("Unbekannter Schlüssel - Zutritt verweigert");
   String currentTime = timeClient.getFormattedTime();
   String newRfidId = "";
       for (byte i = 0; i < cardReader.uid.size; i++) {
@@ -203,21 +206,26 @@ void webserverTask(void *parameter) {
 
 void otherTask(void *parameter) {
   while (true) {
+    // checkForKlingel();
     otherTaskLoop();
     vTaskDelay(10);
   }
 }
 
 void ledRedPulse() {
+  delay(10);
   digitalWrite(ROT, HIGH);
   delay(1000);
   digitalWrite(ROT, LOW);
+  delay(10);
 }
 
 void ledGreenPulse() {
+  delay(10);
   digitalWrite(GRUEN, HIGH);
   delay(1000);
   digitalWrite(GRUEN, LOW);
+  delay(10);
 }
 
 void ledBluePulseShort() {
@@ -254,7 +262,7 @@ void alarm() {
 }
 
 void webserverLoop() { 
-   WiFiClient client = server.available();   // listen for incoming clients
+  WiFiClient client = server.available();   // listen for incoming clients
   if (client) {                             // if a new client connects,
     Serial.println("New Client.");          // print a message out in the serial port
     if (client.connected() && client.available()) {             // if there's bytes to read from the client,
@@ -317,8 +325,9 @@ void keypadEvent(KeypadEvent key) {
   if (keypad.getState() == RELEASED) {
     currentkeypadString += key;
     ledBluePulseShort();
+    delay(10);
     shortPositiveTone();
-
+    delay(10);
     Serial.println(currentkeypadString);
     if (currentkeypadString.length() == 5) {
       if (currentkeypadString == correctPassword) {
@@ -342,7 +351,14 @@ void keypadEvent(KeypadEvent key) {
 
 void removeKey(byte* rfid) {
   for (list<key>::iterator it = keyList.begin(); it != keyList.end(); it++) {
-    if (it->rfid == rfid) {
+    bool isEqual = true;
+    for (byte i = 0; i < 10; i++) {
+      if (it->rfid[i] != rfid[i]) {
+        isEqual = false;
+        break;
+      }
+    }
+    if (isEqual) {
       keyList.erase(it);
       break;
     }
@@ -502,7 +518,7 @@ void printControlPage(WiFiClient client) {
   printLogList(client);
   client.println("</section>");
   client.println("<section>");
-  client.println("<h3>Verfügbare Schlüssel</h3>");
+  client.println("<h3>Autorisierte Schlüssel</h3>");
   printKeys(client);
   client.println("</section>");
   client.println("<section>");
@@ -564,15 +580,20 @@ void printLogList(WiFiClient client) {
 }
 
 void shortPositiveTone() {
-  ledcWriteTone(0, 1500);
-  delay(100);
-  ledcWriteTone(0, 0);
+  tone(BUZZER, 1500, 350);
 }
 
 void successTonesLowHigh() {
-  ledcWriteTone(0, 1000);
-  delay(100);
-  ledcWriteTone(0, 2000);
-  delay(100);
-  ledcWriteTone(0, 0);
+  tone(BUZZER, 1000, 250);
+  delay(200);
+  tone(BUZZER, 2000, 250);
+}
+
+void checkForKlingel() {
+  int buttonStatus = digitalRead(BUTTON);
+  // Serial.println(buttonStatus);
+  if (buttonStatus == LOW) {
+    klingeln();
+    delay(1000);
+  }
 }
