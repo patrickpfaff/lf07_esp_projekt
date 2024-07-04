@@ -108,28 +108,31 @@
         <section>
             <h2>Schlüsselverwaltung</h2>
             <button onclick="toggleRemoveMode()" class="btn-remove">Entfernmodus</button>
-            <div class="log" id="log">
-                <!-- Hier wird das Protokoll angezeigt -->
-            </div>
-            <div class="keys" id="keys">
-                <!-- Hier werden die aktuellen Schlüssel angezeigt -->
-            </div>
+            <section>
+                <h3>Protokoll</h3>
+                <div class="log" id="log">
+                    <!-- Hier wird das Protokoll angezeigt -->
+                </div>
+            </section>
+            <section>
+                <h3>Verfügbare Schlüssel</h3>
+                <div class="keys" id="keys">
+                    <!-- Hier werden die verfügbaren Schlüssel angezeigt -->
+                </div>
+            </section>
         </section>
     </div>
 
     <script>
-        // JavaScript für die Funktionen
         function addName() {
             let nameInput = document.getElementById('nameInput').value.trim();
             if (nameInput !== '') {
-                // get request to the server
                 fetch('http://' + window.location.hostname + ':80/add?key=' + nameInput)
                     .then(response => response.json());
             }
         }
 
         function toggleRemoveMode() {
-           // get request to the server
             fetch('http://' + window.location.hostname + ':80/removeMode')
                 .then(response => response.json());
             

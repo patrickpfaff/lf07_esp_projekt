@@ -6,6 +6,7 @@
 #include <Keypad.h>
 #include <driver/ledc.h> // Hinzufügen der LEDC-Bibliothek
 #include <list>
+#include <NTPClient.h>
 
 using namespace std;
 
@@ -60,9 +61,12 @@ void enterRemoveModus();
 void keypadEvent(KeypadEvent key);
 void alarm();
 void klingeln();
+void shortPositiveTone();
+void successTonesLowHigh();
 
 void printControlPage(WiFiClient client);
 void printKeys(WiFiClient client);
+void printLogList(WiFiClient client);
 
 
 const char keyMap[ROWS][COLS] = {
@@ -84,6 +88,9 @@ const char  FRITZBOXUSER[]        = "FBuser";
 const char  FRITZBOXPASSWORD[]    = "FBpasswort";
 
 // TR064 tr064_connection(FRITZBOX_PORT, FRITZBOX_IP, FRITZBOXUSER, FRITZBOXPASSWORD);
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
 
 byte karte[] = {0xA3, 0xBA, 0x8F, 0x94};
 byte chip[] = {0x23, 0x22, 0xD7, 0x91};
@@ -148,13 +155,31 @@ void otherTaskLoop() {
       }
     }
     if (isEqual) {
+      successTonesLowHigh();
       Serial.println("Rfid gefunden");
       ledGreenPulse();
-      String log = it->name + " hat sich angemeldet";
-      
+      String currentTime = timeClient.getFormattedTime();
+      String newRfidId = "";
+      for (byte i = 0; i < cardReader.uid.size; i++) {
+        newRfidId.concat(cardReader.uid.uidByte[i] < 0x10 ? " 0" : " ");
+        newRfidId.concat(String(cardReader.uid.uidByte[i], HEX));
+      }
+      newRfidId.toUpperCase();
+      String logEntry = "[" + currentTime + "] - " + it->name + " - " + newRfidId;
+      logList.push_back(logEntry);
       return;
     }
   }
+  Serial.println("Unbekannter Schlüssel");
+  String currentTime = timeClient.getFormattedTime();
+  String newRfidId = "";
+      for (byte i = 0; i < cardReader.uid.size; i++) {
+        newRfidId.concat(cardReader.uid.uidByte[i] < 0x10 ? " 0" : " ");
+        newRfidId.concat(String(cardReader.uid.uidByte[i], HEX));
+      }
+  newRfidId.toUpperCase();
+  String logEntry = "[" + currentTime + "] - Unbekannter Schlüssel - " + newRfidId;
+  logList.push_back(logEntry);
   alarm();
   klingeln();
   ledRedPulse();
@@ -164,6 +189,7 @@ void otherTaskLoop() {
 
 void webserverTask(void *parameter) {
   // print private IP address and start web server
+  timeClient.update();
   Serial.println("");
   Serial.println("WiFi connected.");
   Serial.println("IP address: ");
@@ -275,12 +301,15 @@ void wifi_connection() {
     delay(500);
     Serial.print(".");
   }
+  timeClient.setTimeOffset(7200);
+  timeClient.begin();
 }
 
 void keypadEvent(KeypadEvent key) {
   if (keypad.getState() == RELEASED) {
     currentkeypadString += key;
     ledBluePulseShort();
+    shortPositiveTone();
 
     Serial.println(currentkeypadString);
     if (currentkeypadString.length() == 5) {
@@ -290,6 +319,10 @@ void keypadEvent(KeypadEvent key) {
       }
       else {
         Serial.println("Passwort falsch");
+        String currentTime = timeClient.getFormattedTime();
+        currentkeypadString.toUpperCase();
+        String logEntry = "[" + currentTime + "] - Falsches Passwort - " + currentkeypadString;
+        logList.push_back(logEntry);
         ledRedPulse();
         alarm();
       }
@@ -308,6 +341,8 @@ void removeKey(byte* rfid) {
 }
 
 void enterAddModus(String name) {
+  shortPositiveTone();
+  shortPositiveTone();
   Serial.println("Enter Add Modus");
   ledBlueOn();
 
@@ -323,6 +358,7 @@ void enterAddModus(String name) {
     ledBlueOff();
     ledBluePulseShort();
     ledGreenPulse();
+    successTonesLowHigh();
     break;
   }
 }
@@ -452,24 +488,25 @@ void printControlPage(WiFiClient client) {
   client.println("<section>");
   client.println("<h2>Schlüsselverwaltung</h2>");
   client.println("<button onclick=\"toggleRemoveMode()\" class=\"btn-remove\">Entfernmodus</button>");
-  client.println("<div class=\"log\" id=\"log\">");
-  client.println("<!-- Hier wird das Protokoll angezeigt -->");
-  client.println("</div>");
+  client.println("<section>");
+  client.println("<h3>Protokoll</h3>");
+  printLogList(client);
+  client.println("</section>");
+  client.println("<section>");
+  client.println("<h3>Verfügbare Schlüssel</h3>");
   printKeys(client);
+  client.println("</section>");
   client.println("</section>");
   client.println("</div>");
   client.println("<script>");
-  client.println("// JavaScript für die Funktionen");
   client.println("function addName() {");
   client.println("let nameInput = document.getElementById('nameInput').value.trim();");
   client.println("if (nameInput !== '') {");
-  client.println("// get request to the server");
   client.println("fetch('http://' + window.location.hostname + ':80/add?key=' + nameInput)");
   client.println(".then(response => response.json());");
   client.println("}");
   client.println("}");
   client.println("function toggleRemoveMode() {");
-  client.println("// get request to the server");
   client.println("fetch('http://' + window.location.hostname + ':80/removeMode')");
   client.println(".then(response => response.json());");
   client.println("}");
@@ -491,4 +528,28 @@ void printKeys(WiFiClient client) {
     client.println("</div>");
   }
   client.println("</div>");
+}
+
+void printLogList(WiFiClient client) {
+  client.println("<div class=\"log\" id=\"log\">");
+  for (list<String>::iterator it = logList.begin(); it != logList.end(); it++) {
+    client.print("<div>");
+    client.print(*it);
+    client.println("</div>");
+  }
+  client.println("</div>");
+}
+
+void shortPositiveTone() {
+  ledcWriteTone(0, 1500);
+  delay(100);
+  ledcWriteTone(0, 0);
+}
+
+void successTonesLowHigh() {
+  ledcWriteTone(0, 1000);
+  delay(100);
+  ledcWriteTone(0, 2000);
+  delay(100);
+  ledcWriteTone(0, 0);
 }
