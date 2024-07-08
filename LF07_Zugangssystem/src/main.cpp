@@ -80,15 +80,15 @@ const char keyMap[ROWS][COLS] = {
 MFRC522 cardReader(SDA, RST);
 Keypad keypad = Keypad(makeKeymap(keyMap), rowPins, colPins, ROWS, COLS);
 
-// const char* ssid     = "FRITZ!Box 7490";
-// const char* password = "80073437732487114646";
+const char* ssid     = "FRITZ!Box 7490";
+const char* password = "80073437732487114646";
 
 const char  FRITZBOX_IP[]         = "192.168.188.1";
 const int   FRITZBOX_PORT         = 49000;
 const char  FRITZBOXUSER[]        = "FBuser";
 const char  FRITZBOXPASSWORD[]    = "FBpasswort";
 
-// TR064 tr064_connection(FRITZBOX_PORT, FRITZBOX_IP, FRITZBOXUSER, FRITZBOXPASSWORD);
+TR064 tr064_connection(FRITZBOX_PORT, FRITZBOX_IP, FRITZBOXUSER, FRITZBOXPASSWORD);
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
@@ -96,8 +96,8 @@ NTPClient timeClient(ntpUDP);
 byte karte[] = {0xA3, 0xBA, 0x8F, 0x94};
 byte chip[] = {0x23, 0x22, 0xD7, 0x91};
 
-const char* ssid     = "anouri SNS";
-const char* password = "flume budge prolate crypt gave berkeley judaism comely";
+// const char* ssid     = "anouri SNS";
+// const char* password = "flume budge prolate crypt gave berkeley judaism comely";
 
 void setup() {
   Serial.begin(9600);
@@ -206,7 +206,6 @@ void webserverTask(void *parameter) {
 
 void otherTask(void *parameter) {
   while (true) {
-    // checkForKlingel();
     otherTaskLoop();
     vTaskDelay(10);
   }
@@ -244,11 +243,11 @@ void ledBlueOff() {
 
 void klingeln() {
   Serial.println("Klingeling Klingeling");
-  // tr064_connection.init();
-  // String call_params[][2] = {{"NewX_AVM-DE_PhoneNumber", "**9"}};                                          // Die Telefonnummer **9 ist der Fritzbox-Rundruf.
-  // tr064_connection.action("urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_DialNumber", call_params, 1);    // Action: Rundruf
-  // delay(2000);                                                                                            // Warte 2 Sekunden bis zum Auflegen
-  // tr064_connection.action("urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_DialHangup");
+  tr064_connection.init();
+  String call_params[][2] = {{"NewX_AVM-DE_PhoneNumber", "**9"}};                                          // Die Telefonnummer **9 ist der Fritzbox-Rundruf.
+  tr064_connection.action("urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_DialNumber", call_params, 1);    // Action: Rundruf
+  delay(2000);                                                                                            // Warte 2 Sekunden bis zum Auflegen
+  tr064_connection.action("urn:dslforum-org:service:X_VoIP:1", "X_AVM-DE_DialHangup");
 }
 
 void alarm() {
@@ -594,7 +593,6 @@ void successTonesLowHigh() {
 
 void checkForKlingel() {
   int buttonStatus = digitalRead(BUTTON);
-  // Serial.println(buttonStatus);
   if (buttonStatus == LOW) {
     klingeln();
     ledBluePulseShort();
